@@ -1,0 +1,59 @@
+/** 
+ * ALU Otimizada
+ */
+`ifndef PARAM
+`include "Parametros.v"
+`endif
+
+module ALU (
+    input  [4:0]  iControl,
+    input  signed [31:0] iA,
+    input  signed [31:0] iB,
+    output logic  [31:0] oResult
+);
+
+`ifndef RV32I
+    // Compartilhamento de Multiplicador (DSP Block Sharing)
+    // Em vez de instanciar 3 multiplicadores distintos, usamos extensores
+    // de sinal dinâmicos para usar apenas UM multiplicador na FPGA.
+    wire sign_a = (iControl == OPMULHU) ? 1'b0 : iA[31];
+    wire sign_b = (iControl == OPMULHU || iControl == OPMULHSU) ? 1'b0 : iB[31];
+    
+    wire signed [32:0] ext_a = {sign_a, iA};
+    wire signed [32:0] ext_b = {sign_b, iB};
+    
+    wire signed [65:0] mult_shared = ext_a * ext_b;
+`endif
+
+    always @(*) begin
+        case (iControl)
+            OPAND:    oResult <= iA & iB;
+            OPOR:     oResult <= iA | iB;
+            OPXOR:    oResult <= iA ^ iB;
+            OPADD:    oResult <= iA + iB;
+            OPSUB:    oResult <= iA - iB;
+            OPSLT:    oResult <= iA < iB;
+            OPSLTU:   oResult <= $unsigned(iA) < $unsigned(iB);
+            OPSLL:    oResult <= iA << iB[4:0];
+            OPSRL:    oResult <= iA >> iB[4:0];
+            OPSRA:    oResult <= iA >>> iB[4:0];
+            OPLUI:    oResult <= iB;
+            
+`ifndef RV32I
+            OPMUL:    oResult <= mult_shared[31:0];
+            OPMULH:   oResult <= mult_shared[63:32];
+            OPMULHU:  oResult <= mult_shared[63:32];
+            OPMULHSU: oResult <= mult_shared[63:32];
+            
+            OPDIV:    oResult <= iA / iB;
+            OPDIVU:   oResult <= $unsigned(iA) / $unsigned(iB);
+            OPREM:    oResult <= iA % iB;
+            OPREMU:   oResult <= $unsigned(iA) % $unsigned(iB);
+`endif
+            
+            OPNULL:   oResult <= ZERO;
+            default:  oResult <= ZERO;
+        endcase
+    end
+
+endmodule
